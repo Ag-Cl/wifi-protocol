@@ -32,7 +32,11 @@ IPAddress AP_init(const char *ssid,const char *password){
     return WiFi.softAPIP();
 }//AP模式初始化
 
-int pac_send(WiFiUDP &udp,IPAddress tar_ip,const struct PC_Packet *pac){
+int udp_init(WiFiUDP &udp,uint16_t listen_port){
+    return udp.begin(listen_port) ? 0 : -1;//绑定本地端口，收发共用
+}
+
+int pac_send(WiFiUDP &udp,IPAddress tar_ip,const PC_Packet *pac){
     if (tar_ip == IPAddress(0,0,0,0)){
         Serial.println("[-]Unexpected error:Initialization faild!");
         return -1;
@@ -43,8 +47,8 @@ int pac_send(WiFiUDP &udp,IPAddress tar_ip,const struct PC_Packet *pac){
     return 0;
 }
 
-int pac_receive(WiFiUDP &udp, struct PC_Packet *pac){
-    if (udp.parsePacket()){
+int pac_receive(WiFiUDP &udp,PC_Packet *pac){
+    if (udp.parsePacket() > 0){
         uint8_t buffer[PC_PACKET_SIZE];
         int len = udp.read(buffer,PC_PACKET_SIZE);
         if (len == PC_PACKET_SIZE){
@@ -57,10 +61,31 @@ int pac_receive(WiFiUDP &udp, struct PC_Packet *pac){
 
 
 //构造函数
-unpacked::unpacked() : raw(nullptr) {}
-unpacked::unpacked(struct PC_Packet *ptr) : raw(ptr) {}
+//unpacked::unpacked() : raw(nullptr) {}
+//unpacked::unpacked(PC_Packet *ptr) : raw(ptr) {}
+unpacked::unpacked(const uint8_t *raw_pac,int len){
+    //memcpy(&raw,raw_pac,len);
+    if (len == 8){
+        this -> raw.header = raw_pac[0];
+        this -> raw.safety_lock = raw_pac[1];
+        this -> raw.m1_pwm = (uint16_t)(raw_pac[2] | (raw_pac[3] << 8)); //小端模式
+        this -> raw.m2_pwm = (uint16_t)(raw_pac[4] | (raw_pac[5] << 8));
+        this -> raw.seq = raw_pac[6];
+        this -> raw.checksum = raw_pac[7];
+    }else{
+        this -> raw.header = 69;
+        this -> raw.safety_lock = 0;
+        this -> raw.m1_pwm = 0;
+        this -> raw.m2_pwm = 0;
+        this -> raw.seq = 0;
+        this -> raw.checksum = 0;
+    }
+}
 
-uint8_t unpacked::xor_checksum(const struct PC_Packet *ptr){
+unpacked::~unpacked(){}
+
+uint8_t unpacked::xor_checksum(){
+    const PC_Packet *ptr = &(this -> raw);
     uint8_t checksum = 0;
     checksum ^= ptr->header;
     checksum ^= ptr->safety_lock;
@@ -72,15 +97,12 @@ uint8_t unpacked::xor_checksum(const struct PC_Packet *ptr){
     return checksum;
 }//这里决定先使用异或校验和，检验通过后再使用ntoh16转换，保证数据的正确性,转换前&0xff取得数据对应的是转换后的高八位
 
-int unpacked::pc_packet_verify(const PC_Packet *ptr){
-    if (ptr == 0) {
-        return 0;                 // 空指针
-    }
-    const struct PC_Packet *packet = ptr;
+int unpacked::pc_packet_verify(){
+    const PC_Packet *packet = &(this -> raw);
     if (packet->header != PC_HEADER_VALUE) {
         return 0;                 // 包头不对
     }
-    if (xor_checksum(packet) != packet->checksum) {
+    if (xor_checksum() != packet->checksum) {
         return 0;                 // 校验和不匹配
     }
     return 1;                     // 通过
@@ -93,3 +115,16 @@ uint16_t unpacked::ntoh16(uint16_t data){
     return data_ntoh16;
 }//大小端ntoh16转换
 
+int unpacked::unpack(){
+    return 0;//我他妈忘了我创建这个函数干嘛了
+}
+
+uint16_t unpacked::get_m1(){
+    return raw.m1_pwm;
+}
+
+uint16_t unpacked::get_m2(){
+    return raw.m2_pwm;
+}
+
+//this -> x 等价于(*this).x

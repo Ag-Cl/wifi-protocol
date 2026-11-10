@@ -9,34 +9,37 @@
 
 #pragma pack(push,1)
 
-struct PC_Packet{
+typedef struct{
     uint8_t header;       //包头
     uint8_t safety_lock;  //安全锁
     uint16_t m1_pwm;      //一号电机pwm信号
     uint16_t m2_pwm;      //二号电机pwm信号
     uint8_t seq;          //序列号
     uint8_t checksum;     //校验和
-};
+}PC_Packet;
 
 #pragma pack(pop)
 
 IPAddress STA_init(const char *ssid, const char *password);
 IPAddress AP_init(const char *ssid,const char *password);
-int pac_send(WiFiUDP &udp,IPAddress tar_ip,const struct PC_Packet *pac);
-int pac_receive(WiFiUDP &udp, struct PC_Packet *pac);
+int udp_init(WiFiUDP &udp,uint16_t listen_port);
+int pac_send(WiFiUDP &udp,IPAddress tar_ip,const PC_Packet *pac);
+int pac_receive(WiFiUDP &udp,PC_Packet *pac);
 
 class unpacked{
 private:
-    struct PC_Packet *raw;
+    PC_Packet raw;
 public:
-    unpacked();
-    unpacked(struct  PC_Packet *ptr);
-    unpacked(const uint8_t *raw_pac, int len);
+//    unpacked();//构造函数,默认
+//    unpacked(PC_Packet ptr);//构造函数，浅拷贝
+    unpacked(const uint8_t *raw_pac, int len);//构造函数，深拷贝
     ~unpacked();
-    int pc_packet_verify(const struct PC_Packet *ptr);
-    uint8_t xor_checksum(const struct PC_Packet *ptr);
-    uint16_t ntoh16(uint16_t data);
+    int pc_packet_verify();//校验包头和校验和
+    uint8_t xor_checksum();//计算异或校验和
+    uint16_t ntoh16(uint16_t data);//网络字节序转主机字节序
     int unpack();
+    uint16_t get_m1();//接口函数
+    uint16_t get_m2();//接口函数
 };
 
 #endif
