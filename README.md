@@ -1,3 +1,1 @@
-
-A simple protocol which i built in free time.
-
+A simple, fixed-length (8-byte) UDP protocol for ESP32/Arduino remote control. It uses explicit little-endian byte parsing instead of memcpy to ensure stability, performs XOR checksum validation, and provides a basic class for data unpacking.
